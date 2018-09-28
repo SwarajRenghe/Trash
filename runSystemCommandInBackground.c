@@ -8,6 +8,8 @@ int runSystemCommandInBackground (char **tokens) {
 		return 1;
 	}
 	if (processID == 0) { // Child
+		signal (SIGTSTP, SIG_IGN);
+		signal (SIGINT, SIG_IGN);
 		if (execvp(tokens[0], tokens) == 0) {
 			return 1;
 		}
@@ -16,6 +18,18 @@ int runSystemCommandInBackground (char **tokens) {
 			return 1;
 		}
 	} 
+
+	backgroundProcesses[numberOfBackgroundProcesses] = processID;
+	backgroundProcessesState[numberOfBackgroundProcesses] = 'F';
+
+	strcpy (backgroundProcessesCommand[numberOfBackgroundProcesses], tokens[0]);
+	for (int i = 1; tokens[i] != NULL; ++i) {
+		strcat (backgroundProcessesCommand[numberOfBackgroundProcesses], tokens[i]);
+		strcat (backgroundProcessesCommand[numberOfBackgroundProcesses], " ");
+	}
+
+	numberOfBackgroundProcesses++;
+
 	while ((wpid = wait(&status)) > 0);
 
 	return 1;

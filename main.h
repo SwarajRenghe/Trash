@@ -29,6 +29,18 @@ int printNumber (int number, int size);
 int runSystemCommandInBackground (char **tokens);
 int runSystemCommandInForeground (char **tokens);
 int clockCommand (char **tokens);
+void pinfo2 (char **tokens);
+void remindME (char message[], int duration);
+int ExecutePipingWithoutRedirection (char *subcommandsFromColon);
+int countPipes (char *subcommandsFromColon);
+int checkForRedirection (char *subcommandsFromColon);
+// int numberOfSpaceSeperatedCommands (char **subcommandsFromSpaces);
+// int ExecutePipingWithRedirection (char *subcommandsFromColon, int numberOfCommands);
+// int ExecutePipingWithRedirection2 (char *subcommandsFromColon);
+void pinfo3 (pid_t processID);
+int countPipes (char *subcommandsFromColon);
+int onlyRedirect (char **tokens);
+// int onlyRedirection (char *subcommandsFromColon);
 
 #define MAX 1000000
 #define LARGE 1000
@@ -36,9 +48,15 @@ int clockCommand (char **tokens);
 #define HUNDRED 100
 #define TOKENSIZE 75
 extern char* rootDirectory;
+extern char** systemCommands;
+extern pid_t backgroundProcesses[1000];
+extern char backgroundProcessesCommand[100][100];
+extern char backgroundProcessesState[100];
+extern int numberOfBackgroundProcesses;
 
 #define DELIMITER1 ";"
 #define DELIMITER2 " \t\n"
+#define DELIMITER3 "|"
 
 #define RED "\033[0;31m"
 #define RESET "\033[0m"

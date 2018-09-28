@@ -1,119 +1,54 @@
 #include "main.h"
 
-void pinfo2 (char **tokens) {
-	pid_t currentProcessPID;
-	char processPath[LARGE], processInfo[LARGE], processExecutable[LARGE];
-	int getPid = getpid ();
-
-	if (tokens[1] == NULL) {
-		currentProcessPID = getpid ();
-	}
-	else {
-		currentProcessPID = atoi (tokens[1]);
-	}
-	sprintf (processPath, "/proc/%d/status", currentProcessPID);
-	int fileDescriptor = 0;
-	fileDescriptor = open (processPath, O_RDONLY); 
-	// printf("%s\n", processPath);
-
-	printf("pid -- %d\n", currentProcessPID);
-
-	if (fileDescriptor < 0) {
-		printf("TRAsh: Could not detect process status\n");
-		return;
-	} 
-	else {
-		char processState[100];
-		char processStateChar;
-		read (fileDescriptor, processState, 50);
-		close (fileDescriptor);
-
-
-		for (int i = 0; i < 48; ++i) {
-			if (processState[i] == 'S' && processState[i+1] == 't' && processState[i+2] == 'a') {
-				processStateChar = processState[i+7];
-				break;
-			}
+void CtrlZHandler (int sig) {
+	for (int i = 0; i < numberOfBackgroundProcesses; ++i) {
+		if (backgroundProcessesState[i] == 'F') {
+			kill (backgroundProcesses[i], SIGSTOP);
+			backgroundProcessesState[i] = 'S';
 		}
-
-		printf ("Process Status -- {%c}\n", processStateChar);
-	}
-
-	sprintf (processPath, "/proc/%d/statm", currentProcessPID);
-	fileDescriptor = open (processPath, O_RDONLY);
-
-	if (fileDescriptor < 0) {
-		printf("TRAsh: Could not detect process virtual memory size\n");
-		return;
-	} 
-	else {
-		char count[5];
-		read (fileDescriptor, count, 15);
-		close (fileDescriptor);
-		printf("- ");
-		for (int i = 0; count[i] != ' ' && count[i] != '\0'; ++i) {
-			printf("%c", count[i]);
-		}
-		printf(" {Virtual Memory}\n");
-	}
-
-	printf("- Executable Path -- ");
-
-	sprintf (processPath, "/proc/%d/exe", currentProcessPID);
-	int links = readlink (processPath, processInfo, LARGE - 1);
-
-	if (links == -1) {
-		printf("TRAsh: Could not detect process executable path\n");
-		return;
-	}
-	else {
-		processInfo [links] = '\0';
-		char *newProcessInfo = malloc (LARGE * sizeof(char));
-		newProcessInfo = generateNewDirectoryPathFromRoot (rootDirectory, processInfo);
-		printf("%s\n", newProcessInfo);
 	}
 }
 
-void remindME (char message[], int duration) {
-	int processID, status=0, wpid;
-	
-	if ((processID = fork()) < 0) {
-		printf("TRAsh: Error forking a child process\n");
-		return;
-	}
-	if (processID == 0) { // Child
-		sleep (duration);
-		printf("Reminder: %s\n", message);
+void CtlrCHandler (int sig) {
+	for (int i = 0; i < numberOfBackgroundProcesses; ++i) {
+		if (backgroundProcessesState[i] == 'F') {
+			kill (backgroundProcesses[i], SIGKILL);
+			backgroundProcessesState[i] == 'S';
+		}
 	}
 }
+
 
 int executeCommand (char **tokens) {
+	signal (SIGTSTP, CtrlZHandler);
+	signal (SIGINT, CtlrCHandler);
 	if (tokens[0] == NULL) {
 		return 1;
 	}
-	else if (strcmp(tokens[0], "cd") == 0) {
+	if (strcmp(tokens[0], "cd") == 0) {
 		if (tokens[1] == NULL) {
 			chdir (rootDirectory);
 			return 1;
 		}
 		if (tokens[2] != NULL) {
-			printf("Usage:  cd [directoryPath]\n");
+			fprintf(stderr, "Usage:  cd [directoryPath]/\n");
 			return 1;
 		}
 		char **subTokens;
 		int len = strlen (tokens[1]);
 		tokens[1][len-1] = '\0';
 
+
 		subTokens = parseCommandIntoSubCommands (tokens[1], "/");
 		for (int i = 0; subTokens[i] != NULL; ++i) {
 			if (subTokens[i] == "\n") {
 				return 1;
 			}
-			if (chdir(subTokens[i]) == 0) {
+			if (chdir(subTokens[i]) == 1) {
 				return 1;
 			}
 			else {
-				printf("Usage: cd [directoryPath]/ \n");
+				return 1;
 			}
 		}
 		return 1;
@@ -162,8 +97,6 @@ int executeCommand (char **tokens) {
 			flagAL = 1;
 		}
 
-		// printf("flagA = %d flagL = %d flagAL = %d directoryPath = %s\n", flagA, flagL, flagAL, directoryPath);
-
 		if (flagAL == 0 && flagA == 1) {
 			if (directoryPath == NULL) {
 				listAllDirectories ("./");
@@ -208,13 +141,125 @@ int executeCommand (char **tokens) {
 		clockCommand (tokens);
 	}
 	else if (strcmp(tokens[0], "pinfo") == 0) {
-		// pinfo ();
 		pinfo2 (tokens);
 		return 1;		
 	} 
 	else if (strcmp(tokens[0], "exit") == 0) {
 		return 0;		
 	} 
+	else if (strcmp(tokens[0], "quit") == 0) {
+		return 0;		
+	} 
+	else if (strcmp(tokens[0], "jobs") == 0) {
+		if (tokens[1] != NULL) {
+			fprintf(stderr, "Usage: jobs\n");
+			return 1;
+		}
+		if (numberOfBackgroundProcesses == 0) {
+			fprintf(stderr, "No background processes running currently\n");
+			return 1;
+		}
+		for (int i = 0; i < numberOfBackgroundProcesses; ++i) {
+			printf("[%d]", i+1);
+			// pinfo3 (backgroundProcesses[i]);
+			if (backgroundProcessesState[i] == 'S') {
+				printf(" Stopped\n");
+			}
+			else if (backgroundProcessesState[i] == 'R') {
+				printf(" Running\n");
+			}
+			else {
+				printf(" %c", backgroundProcessesState[i]);
+			}
+			printf(" %s", backgroundProcessesCommand[i]);
+			printf(" [%d]\n", backgroundProcesses[i]);
+		}
+		return 1;
+	}
+	else if (strcmp(tokens[0], "setenv") == 0) {
+		if (tokens[1] == NULL) {
+			fprintf(stderr, "Usage: setenv var [value]\n");
+			return 1;
+		}
+		if (tokens[3] != NULL) {
+			fprintf(stderr, "Usage: setenv var [value]\n");
+			return 1;
+		}
+		if (tokens[2] == NULL) {
+			if (setenv(tokens[1], "", 1) != 0) {
+				fprintf(stderr, "Trash: Could not set environment variable \n");
+				return 1;
+			}
+			return 1;
+		}
+		else {
+			if (setenv(tokens[1], tokens[2], 1) != 0) {
+				fprintf(stderr, "Trash: Could not set environment variable \n");
+				return 1;
+			}
+			return 1;
+		}
+	}
+	else if (strcmp(tokens[0], "unsetenv") == 0) {
+		if (tokens[1] == NULL) {
+			fprintf(stderr, "Usage: unsetenv [var]\n");
+			return 1;
+		}
+		if (tokens[2] != NULL) {
+			fprintf(stderr, "Usage: unsetenv [var]\n");
+			return 1;
+		}
+		unsetenv(tokens[1]);
+		return 1;
+	}
+	else if (strcmp(tokens[0], "kjob") == 0) {
+		if (tokens[1] == NULL) {
+			fprintf(stderr, "Usage: kjob [jobNumber] [signalNumber]\n");
+			return 1;
+		}
+		if (tokens[2] == NULL) {
+			fprintf(stderr, "Usage: kjob [jobNumber] [signalNumber]\n");
+			return 1;
+		}
+		if (tokens[3] != NULL) {
+			fprintf(stderr, "Usage: kjob [jobNumber] [signalNumber]\n");
+			return 1;
+		}
+		int jobNumber = atoi (tokens[1]-1);
+		int signalNumber = atoi (tokens[2]);
+
+		if (signalNumber == 9) {
+			kill (backgroundProcesses[jobNumber], signalNumber);
+			int positionToBeRemoved;
+			int flagFound = 0;
+			// for (int i = 0; i < numberOfBackgroundProcesses; ++i) {
+			// 	if (jobNumber == backgroundProcesses[i]) {
+			// 		flagFound = 1;
+			// 		positionToBeRemoved = i;
+			// 		break;
+			// 	}
+			// }
+			if (jobNumber < numberOfBackgroundProcesses) {
+				flagFound = 1;
+			}
+			if (flagFound == 0) {
+				fprintf(stderr, "Did not find jobnumber %d\n", jobNumber);
+				return 1;
+			}
+
+			for (int i = positionToBeRemoved; i < numberOfBackgroundProcesses-1; ++i) {
+				backgroundProcesses[i] = backgroundProcesses[i+1];
+				backgroundProcessesState[i] = backgroundProcessesState[i+1];
+				strcpy (backgroundProcessesCommand[i], backgroundProcessesCommand[i+1]);
+			}
+
+			numberOfBackgroundProcesses--;
+		}
+		else {
+			kill (backgroundProcesses[jobNumber], signalNumber);
+		}
+		return 1;
+	}
 	else if (strcmp(tokens[0], "remindme") == 0) {
 		char message[LARGE];
 		if (tokens[1] == NULL) {
@@ -233,7 +278,98 @@ int executeCommand (char **tokens) {
 		}
 		remindME (message, duration);
 		return 1;
-	} 
+	}
+	else if (strcmp(tokens[0], "fg") == 0) {
+		if (tokens[1] == NULL) {
+			fprintf(stderr, "Usage: fb [jobNumber]\n");
+			return 1;
+		}
+		int jobNumber = atoi (tokens[1]);
+		printf("jobnumer->%d\n", jobNumber);
+		if (jobNumber > 20) {
+			fprintf(stderr, "Did not find jobnumber %d\n", jobNumber);
+			return 1;
+		}
+		pid_t tempPid = backgroundProcesses[jobNumber];
+
+		// kill (tempPid, SIGSTOP);
+		// kill (tempPid, SIGCONT);
+
+		int positionToBeRemoved;
+		int flagFound = 0;
+		// for (int i = 0; i < numberOfBackgroundProcesses; ++i) {
+		// 	if (jobNumber == backgroundProcesses[i]) {
+		// 		flagFound = 1;
+		// 		positionToBeRemoved = i;
+		// 		break;
+		// 	}
+		// }
+		// if (flagFound == 0) {
+		// 	fprintf(stderr, "Did not find jobnumber %d\n", jobNumber);
+		// 	return 1;
+		// }
+		// for (int i = 0; i < numberOfBackgroundProcesses; ++i) {
+		// 	if (backgroundProcessesState[i] == 'S' || backgroundProcessesState[i] == 'R') {
+
+		// 	}
+		// }
+		printf("jopbunerer->%d\n", jobNumber);
+		backgroundProcessesState[jobNumber-1] = 'F';
+		kill (backgroundProcesses[jobNumber-1], SIGCONT);
+		waitpid (backgroundProcesses[jobNumber-1], NULL, WUNTRACED);
+		// numberOfBackgroundProcesses--;
+		return 1;
+	}
+	else if (strcmp(tokens[0], "bg") == 0) {
+		if (tokens[1] == NULL) {
+			fprintf(stderr, "Usage: fb [jobNumber]\n");
+			return 1;
+		}
+		int jobNumber = atoi (tokens[1]);
+		if (jobNumber > 20) {
+			fprintf(stderr, "Did not find jobnumber %d\n", jobNumber);
+			return 1;
+		}
+		pid_t tempPid = backgroundProcesses[jobNumber];
+
+		// kill (tempPid, SIGSTOP);
+		// kill (tempPid, SIGCONT);
+
+		int positionToBeRemoved;
+		int flagFound = 0;
+		// for (int i = 0; i < numberOfBackgroundProcesses; ++i) {
+		// 	if (jobNumber == backgroundProcesses[i]) {
+		// 		flagFound = 1;
+		// 		positionToBeRemoved = i;
+		// 		break;
+		// 	}
+		// }
+		// if (flagFound == 0) {
+		// 	fprintf(stderr, "Did not find jobnumber %d\n", jobNumber);
+		// 	return 1;
+		// }
+		// for (int i = 0; i < numberOfBackgroundProcesses; ++i) {
+		// 	if (backgroundProcessesState[i] == 'S' || backgroundProcessesState[i] == 'R') {
+
+		// 	}
+		// }
+		backgroundProcessesState[jobNumber-1] = 'R';
+		kill (backgroundProcesses[jobNumber-1], SIGCONT);
+
+		// numberOfBackgroundProcesses--;
+		return 1;
+	}
+	else if (strcmp(tokens[0], "overkill") == 0) {
+		if (tokens[1] != NULL) {
+			fprintf(stderr, "Usage: overkill\n");
+			return 1;
+		}
+		for (int i = 0; i < numberOfBackgroundProcesses; ++i) {
+			kill (backgroundProcesses[i], SIGKILL);
+		}
+		numberOfBackgroundProcesses = 0;
+		return 1;
+	}
 	else {
 		int count, isBackGroundProcess = 0, track = 0;
 		for (int i = 0; tokens[i] != NULL; ++i) {
@@ -253,7 +389,6 @@ int executeCommand (char **tokens) {
 			tokens[track-1] = NULL;
 			runSystemCommandInForeground (tokens);
 		}
-
 		return 1;
 	}
 }
