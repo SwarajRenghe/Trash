@@ -3,7 +3,7 @@
 Trash is a shell made for the Linux Operating System, for interacting with the file system. It is made in C, with only standard libraries used. It makes extensive use of linux system calls, and the signals library in C.
 It has complete support for multiple file redirections, piping and setting environment variables. 
 
-Common shell commands implemented  from scratch (including, but not limited to ls, fg, bg, jobs etc), and other user commands are forwarded to the system for execution.
+Common shell commands implemented  from scratch (including ls, fg, bg, jobs etc), and other user commands are forwarded to the system for execution.
 
 Also allows to keep track of all proccess started by the shell using the command `jobs`, each of which can be stopped, sent to the background or brought back to the foreground using the commands `fg` and `bg`. All processes started by the shell can be killed at once using the command `overkill`.
 
